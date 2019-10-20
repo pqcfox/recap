@@ -9,6 +9,7 @@ import statistics
 import cv2
 import numpy as np
 
+from tf_pose import common
 from tf_pose.common import CocoPart
 from tf_pose.estimator import TfPoseEstimator, BodyPart, Human
 from tf_pose.networks import get_graph_path
@@ -26,7 +27,8 @@ ESC_KEY = 27
 UPSAMPLE_SIZE = 4.0
 RUNNING_AVG_SIZE = 3
 FACE_PART_INDEXES = [CocoPart.REye.value, CocoPart.LEye.value,
-                     CocoPart.REar.value, CocoPart.LEar.value]
+                     CocoPart.REar.value, CocoPart.LEar.value,
+                     CocoPart.Nose.value]
 
 estimator = TfPoseEstimator(get_graph_path(MODEL), target_size=(WIDTH, HEIGHT))
 cam = cv2.VideoCapture(CAMERA)
@@ -69,6 +71,13 @@ def pose_average(humans):
     return mean_human
 
 
+def get_human_size(human, img_w, img_h):
+    face_box = human.get_face_box(img_w, img_h)
+    if face_box is None:
+        return None
+    return face_box['w'] * face_box['h']
+
+
 def remove_face(human):
     for part_index in FACE_PART_INDEXES:
         try:
@@ -76,13 +85,6 @@ def remove_face(human):
         except KeyError:
             pass
     return human
-
-
-def get_human_size(human, img_w, img_h):
-    face_box = human.get_face_box(img_w, img_h)
-    if face_box is None:
-        return None
-    return face_box['w'] * face_box['h']
 
 
 human_thread = threading.Thread(target=update_humans)
@@ -121,7 +123,7 @@ while True:
                 running_humans.pop(0)
             mean_human = pose_average(running_humans)
             final_human = remove_face(mean_human)
-            image = TfPoseEstimator.draw_humans(image, [final_human], imgcopy=False)
+            image = TfPoseEstimator.draw_humans(image, [final_human])
         cv2.imshow('recap', image)
 
     if cv2.waitKey(1) == ESC_KEY:
