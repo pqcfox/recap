@@ -4,11 +4,13 @@ import argparse
 import logging
 import threading
 import queue
+import statistics
 
 import cv2
 import numpy as np
 
-from tf_pose.estimator import TfPoseEstimator
+from tf_pose import common
+from tf_pose.estimator import TfPoseEstimator, BodyPart, Human
 from tf_pose.networks import get_graph_path
 
 # This work is based on the run_camera.py script incluced in
@@ -22,6 +24,7 @@ WIDTH, HEIGHT = 384, 384
 MODEL = 'mobilenet_thin'
 ESC_KEY = 27
 UPSAMPLE_SIZE = 4.0
+RUNNING_AVG_SIZE = 3
 
 estimator = TfPoseEstimator(get_graph_path(MODEL), target_size=(WIDTH, HEIGHT))
 cam = cv2.VideoCapture(CAMERA)
@@ -44,18 +47,24 @@ def update_humans():
 
 
 def pose_average(humans):
-    import pdb; pdb.set_trace()
     mean_parts = []
     mean_human = Human([])
     for part_index in range(common.CocoPart.Background.value):
-        if part_index not in human.body_parts.keys():
+        parts = []
+        for human in humans:
+            try:
+                part = human.body_parts[part_index]
+                parts.append(part)
+            except KeyError:
+                pass
+        if len(parts) == 0:
             continue
-        parts = [human.body_parts[part_index] for human in humans]
-        mean_x = mean([part.x for part in parts])
-        mean_y = mean([part.y for part in parts])
+        mean_x = statistics.mean([part.x for part in parts])
+        mean_y = statistics.mean([part.y for part in parts])
         mean_part = BodyPart(f'mean-{part_index}', part_index,
                              mean_x, mean_y, None)
         mean_human.body_parts[part_index] = mean_part
+    return mean_human
 
 
 def get_human_size(human, img_w, img_h):
@@ -96,7 +105,11 @@ while True:
                 target_human = human
                 target_size = size
         if target_human is not None:
-            image = TfPoseEstimator.draw_humans(image, [target_human], imgcopy=False)
+            running_humans.append(target_human)
+            if len(running_humans) > RUNNING_AVG_SIZE:
+                running_humans.pop(0)
+            mean_human = pose_average(running_humans)
+            image = TfPoseEstimator.draw_humans(image, [mean_human], imgcopy=False)
         cv2.imshow('recap', image)
 
     if cv2.waitKey(1) == ESC_KEY:
