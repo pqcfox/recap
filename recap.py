@@ -71,31 +71,20 @@ def pose_average(humans):
     return mean_human
 
 
-def get_armpit_angles(human):
-    sides = [(CocoPart.LHip, CocoPart.LShoulder, CocoPart.LElbow),
-             (CocoPart.RHip, CocoPart.RShoulder, CocoPart.RElbow)]
-    angles = []
-    for side in sides:
-        hip_index, shoulder_index, elbow_index = side
-        try:
-            print(human.body_parts.keys())
-            print([index for index in side])
-            print('------')
-            hip = human.body_parts[hip_index.value]
-            shoulder = human.body_parts[shoulder_index.value]
-            elbow = human.body_parts[elbow_index.value]
-        except KeyError:
-            angles.append(None)
-            continue
-        hip_shoulder = (hip.x - shoulder.x, hip.y - shoulder.y)
-        elbow_shoulder = (elbow.x - shoulder.x, elbow.y - shoulder.y)
-        dot_prod = (hip_shoulder[0] * elbow_shoulder[0] +
-                    hip_shoulder[1] * elbow_shoulder[1])
-        hs_len = np.sqrt(hip_shoulder[0]**2 + hip_shoulder[1]**2)
-        es_len = np.sqrt(elbow_shoulder[0]**2 + elbow_shoulder[1]**2)
-        angle = np.arccos(dot_prod / (hs_len * es_len))
-        angles.append(angle)
-    return angles
+def get_angle(human, a_part_index, b_part_index, c_part_index):
+    try:
+        a_part = human.body_parts[a_part_index.value]
+        b_part = human.body_parts[b_part_index.value]
+        c_part = human.body_parts[c_part_index.value]
+    except KeyError:
+        return None
+    a_to_b = (a_part.x - b_part.x, a_part.y - b_part.y)
+    c_to_b = (c_part.x - b_part.x, c_part.y - b_part.y)
+    dot_prod = a_to_b[0] * c_to_b[0] + a_to_b[1] * c_to_b[1]
+    ab_len = np.sqrt(a_to_b[0]**2 + a_to_b[1]**2)
+    cb_len = np.sqrt(c_to_b[0]**2 + c_to_b[1]**2)
+    angle = np.arccos(dot_prod / (ab_len * cb_len))
+    return angle
 
 
 def get_human_size(human, img_w, img_h):
@@ -150,7 +139,8 @@ while True:
                 running_humans.pop(0)
             mean_human = pose_average(running_humans)
             final_human = remove_face(mean_human)
-            print(get_armpit_angles(final_human))
+            print(get_angle(final_human, CocoPart.LHip,
+                            CocoPart.LShoulder, CocoPart.LElbow))
             image = TfPoseEstimator.draw_humans(image, [final_human])
         cv2.imshow('recap', image)
 
