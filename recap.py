@@ -43,12 +43,11 @@ def update_humans():
             humans = estimator.inference(image_copy, resize_to_default=True,
                                          upsample_size=UPSAMPLE_SIZE)
             q.put(humans)
+        time.sleep(0.001)
 
-        time.sleep(0.01)
 
-
-t1 = threading.Thread(target=update_humans)
-t1.start()
+human_thread = threading.Thread(target=update_humans)
+human_thread.start()
 
 while True:
     with image_lock:
@@ -67,19 +66,5 @@ while True:
     if cv2.waitKey(1) == ESC_KEY:
         break
 
-
-# while True:
-#     if image is not None:
-#         image_lock.acquire()
-#         image_copy = image.copy()
-#         image_lock.release()
-#         humans = estimator.inference(image_copy, resize_to_default=True,
-#                                      upsample_size=UPSAMPLE_SIZE)
-#     time.sleep(0.01)
-
-t1.join()
+human_thread.join()
 cv2.destroyAllWindows()
-
-#     if cv2.waitKey(1) == ESC_KEY:
-#         break
-
