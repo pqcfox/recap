@@ -54,13 +54,15 @@ while True:
         _, image = cam.read()
 
     try:
-        humans = q.get(False)
+        new_humans = q.get(False)
         with image_lock:
-            image = TfPoseEstimator.draw_humans(image, humans, imgcopy=False)
+            humans = new_humans
     except queue.Empty:
         pass
 
     with image_lock:
+        if humans is not None:
+            image = TfPoseEstimator.draw_humans(image, humans, imgcopy=False)
         cv2.imshow('Recap', image)
 
     if cv2.waitKey(1) == ESC_KEY:
