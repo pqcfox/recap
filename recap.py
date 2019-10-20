@@ -1,6 +1,9 @@
+import sys
+import time
 import argparse
 import logging
-import time
+import threading
+import queue
 
 import cv2
 import numpy as np
@@ -14,8 +17,6 @@ from tf_pose.networks import get_graph_path, model_wh
 # To run the below script, first install tf-pose-estimation
 # via `pip install tf-pose-estimation`.
 
-fps_time = 0
-
 CAMERA = 0
 WIDTH, HEIGHT = 368, 368
 MODEL = 'mobilenet_thin'
@@ -24,14 +25,61 @@ UPSAMPLE_SIZE = 4.0
 
 estimator = TfPoseEstimator(get_graph_path(MODEL), target_size=(WIDTH, HEIGHT))
 cam = cv2.VideoCapture(CAMERA)
+q = queue.Queue()
+
+image = None
+image_lock = threading.Lock()
+humans = None
+
+
+def update_humans():
+    while True:
+        image_copy = None
+        with image_lock:
+            if image is not None:
+                image_copy = image.copy()
+
+        if image_copy is not None:
+            humans = estimator.inference(image_copy, resize_to_default=True,
+                                         upsample_size=UPSAMPLE_SIZE)
+            q.put(humans)
+
+        time.sleep(0.01)
+
+
+t1 = threading.Thread(target=update_humans)
+t1.start()
 
 while True:
-    _, image = cam.read()
-    humans = estimator.inference(image, resize_to_default=True,
-                                 upsample_size=UPSAMPLE_SIZE)
-    image = TfPoseEstimator.draw_humans(image, humans, imgcopy=False)
-    cv2.imshow('Recap', image)
+    with image_lock:
+        _, image = cam.read()
+
+    try:
+        humans = q.get(False)
+        with image_lock:
+            image = TfPoseEstimator.draw_humans(image, humans, imgcopy=False)
+    except queue.Empty:
+        pass
+
+    with image_lock:
+        cv2.imshow('Recap', image)
+
     if cv2.waitKey(1) == ESC_KEY:
         break
 
+
+# while True:
+#     if image is not None:
+#         image_lock.acquire()
+#         image_copy = image.copy()
+#         image_lock.release()
+#         humans = estimator.inference(image_copy, resize_to_default=True,
+#                                      upsample_size=UPSAMPLE_SIZE)
+#     time.sleep(0.01)
+
+t1.join()
 cv2.destroyAllWindows()
+
+#     if cv2.waitKey(1) == ESC_KEY:
+#         break
+
