@@ -25,24 +25,19 @@ UPSAMPLE_SIZE = 4.0
 
 estimator = TfPoseEstimator(get_graph_path(MODEL), target_size=(WIDTH, HEIGHT))
 cam = cv2.VideoCapture(CAMERA)
-q = queue.Queue()
 
 image = None
-image_lock = threading.Lock()
+image_queue = queue.Queue(maxsize=1)
 humans = None
+humans_queue = queue.Queue(maxsize=1)
 
 
 def update_humans():
     while True:
-        image_copy = None
-        with image_lock:
-            if image is not None:
-                image_copy = image.copy()
-
-        if image_copy is not None:
-            humans = estimator.inference(image_copy, resize_to_default=True,
-                                         upsample_size=UPSAMPLE_SIZE)
-            q.put(humans)
+        image = image_queue.get()
+        humans = estimator.inference(image, resize_to_default=True,
+                                     upsample_size=UPSAMPLE_SIZE)
+        humans_queue.put(humans)
         time.sleep(0.001)
 
 
@@ -50,19 +45,20 @@ human_thread = threading.Thread(target=update_humans)
 human_thread.start()
 
 while True:
-    with image_lock:
-        _, image = cam.read()
+    _, image = cam.read()
+    try:
+        image_queue.get(None)
+    except queue.Empty:
+        pass
+    image_queue.put(image.copy())
 
     try:
-        new_humans = q.get(False)
-        with image_lock:
-            humans = new_humans
+        humans = humans_queue.get(False)
     except queue.Empty:
         pass
 
-    with image_lock:
-        if humans is not None:
-            image = TfPoseEstimator.draw_humans(image, humans, imgcopy=False)
+    if humans is not None:
+        image = TfPoseEstimator.draw_humans(image, humans, imgcopy=False)
         cv2.imshow('Recap', image)
 
     if cv2.waitKey(1) == ESC_KEY:
