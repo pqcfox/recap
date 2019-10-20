@@ -9,7 +9,7 @@ import statistics
 import cv2
 import numpy as np
 
-from tf_pose import common
+from tf_pose.common import CocoPart
 from tf_pose.estimator import TfPoseEstimator, BodyPart, Human
 from tf_pose.networks import get_graph_path
 
@@ -25,6 +25,8 @@ MODEL = 'mobilenet_thin'
 ESC_KEY = 27
 UPSAMPLE_SIZE = 4.0
 RUNNING_AVG_SIZE = 3
+FACE_PART_INDEXES = [CocoPart.REye.value, CocoPart.LEye.value,
+                     CocoPart.REar.value, CocoPart.LEar.value]
 
 estimator = TfPoseEstimator(get_graph_path(MODEL), target_size=(WIDTH, HEIGHT))
 cam = cv2.VideoCapture(CAMERA)
@@ -49,7 +51,7 @@ def update_humans():
 def pose_average(humans):
     mean_parts = []
     mean_human = Human([])
-    for part_index in range(common.CocoPart.Background.value):
+    for part_index in range(CocoPart.Background.value):
         parts = []
         for human in humans:
             try:
@@ -65,6 +67,15 @@ def pose_average(humans):
                              mean_x, mean_y, None)
         mean_human.body_parts[part_index] = mean_part
     return mean_human
+
+
+def remove_face(human):
+    for part_index in FACE_PART_INDEXES:
+        try:
+            del human.body_parts[part_index]
+        except KeyError:
+            pass
+    return human
 
 
 def get_human_size(human, img_w, img_h):
@@ -109,7 +120,8 @@ while True:
             if len(running_humans) > RUNNING_AVG_SIZE:
                 running_humans.pop(0)
             mean_human = pose_average(running_humans)
-            image = TfPoseEstimator.draw_humans(image, [mean_human], imgcopy=False)
+            final_human = remove_face(mean_human)
+            image = TfPoseEstimator.draw_humans(image, [final_human], imgcopy=False)
         cv2.imshow('recap', image)
 
     if cv2.waitKey(1) == ESC_KEY:
