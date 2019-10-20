@@ -89,32 +89,36 @@ def get_angle(human, a_part_index, b_part_index, c_part_index):
     return angle
 
 
-def draw_target(image, human, dist_part_index, pivot_part_index,
-                angles, colors, reverse_angles=False, init_angle=np.pi/2.0):
+def draw_target(image, human, a_part_index, b_part_index, angles, colors):
     img_h, img_w = image.shape[:2]
     try:
-        dist_part = human.body_parts[dist_part_index.value]
-        pivot_part = human.body_parts[pivot_part_index.value]
+        a_part = human.body_parts[a_part_index.value]
+        b_part = human.body_parts[b_part_index.value]
     except KeyError:
         return image
 
-    distance = int(np.sqrt(((dist_part.x - pivot_part.x) * img_w)**2 +
-                           ((dist_part.y - pivot_part.y) * img_h)**2))
-    center = (int(pivot_part.x * img_w + 0.5),
-              int(pivot_part.y * img_h + 0.5))
+    distance = int(np.sqrt(((a_part.x - b_part.x) * img_w)**2 +
+                           ((a_part.y - b_part.y) * img_h)**2))
+    center = (int(b_part.x * img_w + 0.5),
+              int(b_part.y * img_h + 0.5))
     axes = (distance, distance)
+    init_angle = int(np.arctan2((a_part.y - b_part.y) * img_h,
+                                (a_part.x - b_part.x) * img_w) *
+                     360/(2 * np.pi))
+
+    print(init_angle)
+    print((a_part.y - b_part.y) * img_h,
+          (a_part.x - b_part.x) * img_w)
 
     target_image = image.copy()
-    prev_end_angle = init_angle * 360/(2 * np.pi)
+    prev_end_angle = init_angle
     for angle, color in zip(angles, colors):
-        if reverse_angles:
-            angle *= -1
         start_angle = prev_end_angle
         end_angle = int(start_angle + angle * 360/(2 * np.pi))
         prev_end_angle = end_angle
         cv2.ellipse(target_image, center, axes, 0, start_angle, end_angle, color, thickness=-1)
 
-    image = cv2.addWeighted(image, 0.1, target_image, 0.9, 0.0)
+    image = cv2.addWeighted(image, 0.2, target_image, 0.8, 0.0)
     return image
 
 
@@ -174,7 +178,7 @@ while True:
                             CocoPart.LShoulder, CocoPart.LElbow))
 
             image = draw_target(image, final_human, CocoPart.LHip, CocoPart.LShoulder,
-                                HSE_ANGLES, HSE_COLORS, reverse_angles=True)
+                                HSE_ANGLES, HSE_COLORS)
             image = TfPoseEstimator.draw_humans(image, [final_human])
         cv2.imshow('recap', image)
 
