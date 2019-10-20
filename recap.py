@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from tf_pose.estimator import TfPoseEstimator
-from tf_pose.networks import get_graph_path, model_wh
+from tf_pose.networks import get_graph_path
 
 # This work is based on the run_camera.py script incluced in
 # https://github.com/ildoonet/tf-pose-estimation.
@@ -18,7 +18,7 @@ from tf_pose.networks import get_graph_path, model_wh
 # via `pip install tf-pose-estimation`.
 
 CAMERA = 0
-WIDTH, HEIGHT = 368, 368
+WIDTH, HEIGHT = 384, 384
 MODEL = 'mobilenet_thin'
 ESC_KEY = 27
 UPSAMPLE_SIZE = 4.0
@@ -31,6 +31,8 @@ image_queue = queue.Queue(maxsize=1)
 humans = None
 humans_queue = queue.Queue(maxsize=1)
 
+running_humans = []
+
 
 def update_humans():
     while True:
@@ -41,8 +43,33 @@ def update_humans():
         time.sleep(0.001)
 
 
+def pose_average(humans):
+    import pdb; pdb.set_trace()
+    mean_parts = []
+    mean_human = Human([])
+    for part_index in range(common.CocoPart.Background.value):
+        if part_index not in human.body_parts.keys():
+            continue
+        parts = [human.body_parts[part_index] for human in humans]
+        mean_x = mean([part.x for part in parts])
+        mean_y = mean([part.y for part in parts])
+        mean_part = BodyPart(f'mean-{part_index}', part_index,
+                             mean_x, mean_y, None)
+        mean_human.body_parts[part_index] = mean_part
+
+
+def get_human_size(human, img_w, img_h):
+    face_box = human.get_face_box(img_w, img_h)
+    if face_box is None:
+        return None
+    return face_box['w'] * face_box['h']
+
+
 human_thread = threading.Thread(target=update_humans)
 human_thread.start()
+
+cv2.namedWindow('recap', cv2.WND_PROP_FULLSCREEN)
+cv2.setWindowProperty('recap', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
 while True:
     _, image = cam.read()
@@ -58,8 +85,19 @@ while True:
         pass
 
     if humans is not None:
-        image = TfPoseEstimator.draw_humans(image, humans, imgcopy=False)
-        cv2.imshow('Recap', image)
+        img_w, img_h = image.shape[1], image.shape[0]
+        target_human = None
+        target_size = 0
+        for human in humans:
+            size = get_human_size(human, img_w, img_h)
+            if size is None:
+                continue
+            if size > target_size:
+                target_human = human
+                target_size = size
+        if target_human is not None:
+            image = TfPoseEstimator.draw_humans(image, [target_human], imgcopy=False)
+        cv2.imshow('recap', image)
 
     if cv2.waitKey(1) == ESC_KEY:
         break
